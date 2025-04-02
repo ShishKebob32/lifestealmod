@@ -48,7 +48,7 @@ public class LifestealMod implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		LOGGER.info("Lifesteal mod has been initialized!");
+		LOGGER.info("Mod has been initialized!");
 
 		registerConfig();
 		registerEvents();
@@ -56,82 +56,6 @@ public class LifestealMod implements ModInitializer {
 		// registerReviveCommand();
 		recipeViewRecipeCommand();
 		registerOpReviveCommand();
-	}
-
-	private void registerConfig() {
-		AutoConfig.register(ModConfig.class, GsonConfigSerializer::new);
-	}
-
-	private void registerEvents() {
-		// player death and drop heart
-		ServerLivingEntityEvents.ALLOW_DEATH.register((entity, source, amount) -> {
-			if (entity instanceof PlayerEntity) {
-				PlayerEntity player = (PlayerEntity) entity;
-				LivingEntity attacker = (LivingEntity) source.getAttacker();
-				ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
-
-				// do not continue if player has a totem equipped
-				if (player.getMainHandStack().getItem() == Items.TOTEM_OF_UNDYING 
-				    || player.getOffHandStack().getItem() == Items.TOTEM_OF_UNDYING) {
-					return true;
-				}
-
-				// killed by player
-				if (attacker instanceof PlayerEntity) {
-					PlayerEntity playerAttacker = (PlayerEntity) attacker;
-
-					// attacker has less than 'maxHeartCap' health
-					if (attacker.getAttributeBaseValue(EntityAttributes.GENERIC_MAX_HEALTH) < config.maxHeartCap) {
-						// give one heart to the attacker
-						increasePlayerHealth(playerAttacker);
-						playerAttacker.sendMessage(
-								Text.literal("You gained an additional heart!").formatted(Formatting.GRAY),
-								true);
-					} else {
-						ItemStack heartStack = createCustomNetherStar("Heart");
-						player.dropItem(heartStack, true);
-					}
-
-				} else if (!(attacker instanceof PlayerEntity)) {
-					ItemStack heartStack = createCustomNetherStar("Heart");
-					player.dropItem(heartStack, true);
-				}
-
-				// decrease the player's max health
-				double playerMaxHealth = player.getAttributeBaseValue(EntityAttributes.GENERIC_MAX_HEALTH);
-				player.getAttributeInstance(EntityAttributes.GENERIC_MAX_HEALTH).setBaseValue(playerMaxHealth - 2.0);
-				player.sendMessage(Text.literal("You lost a heart!").formatted(Formatting.RED),
-						true);
-
-				// update the player max health after decreasing it
-				playerMaxHealth = player.getAttributeBaseValue(EntityAttributes.GENERIC_MAX_HEALTH);
-
-				if (playerMaxHealth <= 1.0) {
-					((ServerPlayerEntity) player).changeGameMode(GameMode.SPECTATOR);
-					player.sendMessage(
-							Text.literal("You lost all your hearts! You are now in spectator mode!")
-									.formatted(Formatting.GRAY),
-							true);
-
-					player.setHealth(1.0f);
-
-					if (!player.getWorld().getGameRules().getBoolean(GameRules.KEEP_INVENTORY)) {
-						player.getInventory().dropAll();
-					}
-
-					player.getServer().getPlayerManager().broadcast(
-							Text.literal("→ " + player.getDisplayName().getString()
-									+ " has lost all of his hearts and is eliminated!")
-									.formatted(Formatting.RED),
-							false);
-
-					// return false to prevent the player from dying
-					return false;
-				}
-			}
-
-			return true;
-		});
 
 		ModConfig config = AutoConfig.getConfigHolder(ModConfig.class).getConfig();
 
@@ -246,6 +170,22 @@ public class LifestealMod implements ModInitializer {
 							enderChestInventory.setStack(i, ItemStack.EMPTY);
 							player.giveItemStack(new ItemStack(Items.DRAGON_EGG));
 							player.sendMessage(Text.literal("You cannot keep the dragon egg in your ender chest!")
+									.formatted(Formatting.RED), true);
+					}
+				});
+			});
+		}
+
+		if (config.noMaceEnderChest) {
+			ServerTickEvents.END_SERVER_TICK.register(server -> {
+				server.getPlayerManager().getPlayerList().forEach(player -> {
+					EnderChestInventory enderChestInventory = player.getEnderChestInventory();
+
+					for (int i = 0; i < enderChestInventory.size(); i++) {
+						if (enderChestInventory.getStack(i).getItem() == Items.DRAGON_EGG) {
+							enderChestInventory.setStack(i, ItemStack.EMPTY);
+							player.giveItemStack(new ItemStack(Items.MACE));
+							player.sendMessage(Text.literal("You cannot keep the mace in your ender chest!")
 									.formatted(Formatting.RED), true);
 						}
 					}
